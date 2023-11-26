@@ -8,7 +8,7 @@
 
 Изначально в box generic/debian11 диск имеете таблицу разделов msdos. Из-за проблем возникающих при установке grub решил не тратить время и записать загрузочную запись на оба новых диска, а массив собирается из разделов.
 
-`**lsblk**`
+`lsblk`
 ```
 NAME   MAJ:MIN RM   SIZE RO TYPE MOUNTPOINT
 sda      8:0    0   128G  0 disk
@@ -34,7 +34,7 @@ mdadm --detail --scan >> /etc/mdadm/mdadm.conf
 update-initramfs -u
 ```
 
-`**lsblk**`
+`lsblk`
 ```
 NAME    MAJ:MIN RM   SIZE RO TYPE  MOUNTPOINT
 sda       8:0    0   128G  0 disk
@@ -148,7 +148,7 @@ reboot
 
 ## Извлёк старый /dev/sda
 
-`**lsblk**`
+`lsblk`
 ```
 NAME        MAJ:MIN RM  SIZE RO TYPE  MOUNTPOINT
 sda           8:0    0   20G  0 disk
@@ -165,7 +165,7 @@ sdb           8:16   0   20G  0 disk
     └─md0p3 259:2    0 17.6G  0 part  /
 ```
 
-`**blkid**`
+`blkid`
 ```
 /dev/sdb1: UUID="42c18d11-b0ef-2e7a-0cd2-466f27c07ef2" UUID_SUB="49b0debe-5021-20da-057a-769127f484d2" LABEL="disksubsystem:0" TYPE="linux_raid_member" PARTUUID="d2c9bc5f-01"
 /dev/sda1: UUID="42c18d11-b0ef-2e7a-0cd2-466f27c07ef2" UUID_SUB="cad99d6d-1e88-009c-ec7d-380a647ee755" LABEL="disksubsystem:0" TYPE="linux_raid_member" PARTUUID="df96f95a-01"
