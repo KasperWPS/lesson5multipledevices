@@ -1,0 +1,100 @@
+# -*- mode: ruby -*-
+# vim: set ft=ruby :
+
+MACHINES = {
+  :disksubsystem => {
+        :box_name => "generic/debian11",
+        :disks => {
+            :sata1 => {
+                :dfile => './sata1.vdi',
+                :size => 250,
+                :port => 1
+            },
+            :sata2 => {
+                :dfile => './sata2.vdi',
+                :size => 250,
+                :port => 2
+            },
+            :sata3 => {
+                :dfile => './sata3.vdi',
+                :size => 250,
+                :port => 3
+            },
+            :sata4 => {
+                :dfile => './sata4.vdi',
+                :size => 250,
+                :port => 4
+            }
+        }
+  }
+}
+
+Vagrant.configure("2") do |config|
+
+  MACHINES.each do |boxname, boxconfig|
+
+      config.vm.define boxname do |box|
+
+          # Отключить автообновление virtualbox addons, для данного задания они не нужны
+          # если плагин vbguest не установлен - необходимо закомментировать
+          #box.vbguest.auto_update = false
+
+          box.vm.box = boxconfig[:box_name]
+          box.vm.host_name = boxname.to_s
+
+          box.vm.provider :virtualbox do |vb|
+            vb.customize ["modifyvm", :id, "--memory", "1024"]
+            needsController = false
+            boxconfig[:disks].each do |dname, dconf|
+                unless File.exist?(dconf[:dfile])
+                    vb.customize ['createhd', '--filename', dconf[:dfile], '--variant', 'Fixed', '--size', dconf[:size]]
+                    needsController =  true
+                end
+            end
+            if needsController == true
+                # for virtualbox 7 choose SAS Controller
+                vb.customize ["storagectl", :id, "--name", "SAS Controller", "--add", "sas" ]
+                boxconfig[:disks].each do |dname, dconf|
+                    vb.customize ['storageattach', :id,  '--storagectl', 'SAS Controller', '--port', dconf[:port], '--device', 0, '--type', 'hdd', '--medium', dconf[:dfile]]
+                end
+            end
+          end
+
+
+        box.vm.provision "shell", inline: <<-SHELL
+            mkdir -p ~root/.ssh; cp ~vagrant/.ssh/auth* ~root/.ssh
+            apt-get update
+            apt-get install -y mdadm smartmontools hdparm gdisk lshw parted
+            # Удаляем суперблок устройств, на случай повторного выполнения provision
+            mdadm --zero-superblock --force /dev/sd{b,c,d,e}
+            mdadm --create --verbose /dev/md0 -l 10 -n 4 /dev/sd{b,c,d,e}
+
+            if [ $? -eq 0 ]; then
+                # Т.к. оперируем целыми блочными устройствами без разбиения на разделы - указываем /dev/sd*
+                echo "DEVICE /dev/sd*" > /etc/mdadm/mdadm.conf
+                mdadm --detail --scan >> /etc/mdadm/mdadm.conf
+                update-initramfs -u
+                # Create partition table
+                parted -s /dev/md0 mklabel gpt
+                # Create 5 primary partitions
+                for i in $(seq 1 5); do
+                    num=$((${num}+20))
+                    sudo parted /dev/md0 mkpart primary ext4 $((${num}-20))% ${num}%
+                done
+                # Create Ext4 filesystem on new partitions
+                for i in $(seq 1 5); do sudo mkfs.ext4 /dev/md0p$i; done
+                # mount
+                sudo mkdir -p /raid/part{1,2,3,4,5}
+                for i in $(seq 1 5); do sudo mount /dev/md0p$i /raid/part$i; done
+                # modified fstab
+                for i in $(seq 1 5); do
+                    # UUID - universally unique identifier
+                    uuid=`blkid -o export /dev/md0p${i} | grep ^UUID`
+                    sudo echo "${uuid} /raid/part${i} ext4 noatime 0 0" >> /etc/fstab
+                done
+            fi
+          SHELL
+
+      end
+  end
+end
